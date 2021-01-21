@@ -17,6 +17,6 @@
     "require": {
         "symfony/http-foundation": "^5.2",
         "symfony/http-client": "^5.2",
-        "pkp/pkp-lib": "^1.1"
+        "league/mime-type-detection": "^1.7"
     }
 }
