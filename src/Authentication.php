@@ -3,6 +3,7 @@
 namespace Wiselyst\OAuth2Proxy;
 
 use Symfony\Component\HttpFoundation\Session\Session;
+use Symfony\Contracts\HttpClient\HttpClientInterface;
 
 class Authentication{
     
@@ -10,6 +11,13 @@ class Authentication{
      * @var Session
      */
     private $session;
+
+    /**
+     * Http client
+     * @var HttpClientInterface
+     */
+    protected $httpClient;
+
 
     /**
      * Session name for the access token
@@ -23,12 +31,9 @@ class Authentication{
      */
     const REFRESH_TOKEN_SESSION = 'oauth_refresh_token';
 
-    public function __construct(){
+    public function __construct(HttpClientInterface $httpClient){
         $this->session = new Session();
-
-        if(!$this->session->isStarted()){
-            $this->session->start();
-        }
+        $this->httpClient = $httpClient;
     }
 
     public function setAccessToken(string $accessToken){
@@ -59,10 +64,31 @@ class Authentication{
      * Attempt an access token refresh
      * @return true
      */
-    public function renewAccessToken(){
+    public function renewAccessToken($host, $clientId, $clientSecret){
         $this->session->clear();
         $this->session->migrate(false);
-        return true;
+
+        $response = $this->httpClient->request('POST', $host . '/oauth/token', [
+            'body' => [
+                'grant_type' => 'refresh_token',
+                'client_id' => $clientId,
+                'client_secret' => $clientSecret,
+                'refresh_token' => $this->getRefreshToken(),
+            ]
+        ]);
+        
+        $parsedResponse = json_decode($response, true);
+        
+        if(isset($parsedResponse['refresh_token'])){
+            $this->authentication->setAccessToken($parsedResponse['refresh_token']);
+        }
+
+        if(isset($parsedResponse['access_token'])){
+            $this->authentication->setAccessToken($parsedResponse['access_token']);
+            return true;
+        }
+
+        return false;
     }
 
     /**

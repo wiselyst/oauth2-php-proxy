@@ -2,12 +2,21 @@
 
 namespace Wiselyst\OAuth2Proxy;
 
+use Exception;
+use Symfony\Component\HttpClient\HttpClient;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Session\Session;
+use Symfony\Contracts\HttpClient\HttpClientInterface;
+use Josantonius\MimeType\MimeType;
 
 class OAuth2Proxy{
 
     protected const ALLOWED_GRANT_TYPES = ['authorization_code', 'refresh_token'];
+
+    protected const OVERRIDE_MIME_CONTENT_TYPE = [
+        'css' => 'text/css',
+        'js'  => 'application/javascript'
+    ];
 
     /**
      * Enabled grant types
@@ -26,6 +35,12 @@ class OAuth2Proxy{
      * @var Session
      */
     protected $session;
+
+    /**
+     * HttpClient
+     * @var HttpClientInterface
+     */
+    protected $httpClient;
 
     /**
      * API server host
@@ -70,8 +85,11 @@ class OAuth2Proxy{
     protected $scope = "";
 
     public function __construct(){
-        $this->authentication = new Authentication();
         $this->session = new Session();
+        $this->httpClient = HttpClient::create();
+
+        $this->authentication = new Authentication($this->httpClient);
+
 
         if(!$this->session->isStarted()){
             $this->session->start();
@@ -164,7 +182,36 @@ class OAuth2Proxy{
      * @return void
      */
     public function handleAuthorizationCodeCallback(){
+        // Verify state
+        $state = $this->session->get('state');
 
+        if(strlen($state) === 0 && $state !== $this->request->query->get('state')){
+            throw new Exception('Invalid state argument');
+        }
+        
+        // Auth code -> token
+        $response = $this->httpClient->request('POST', $this->apiHost . '/oauth/token', [
+            'body' => [
+                'grant_type' => 'authorization_code',
+                'client_id' => $this->clientId,
+                'client_secret' => $this->clientSecret,
+                'redirect_uri' => $this->apiHost . '/callback',
+                'code' => $this->request->query->get('code')
+            ]
+        ]);
+        
+        $parsedResponse = json_decode($response, true);
+        
+        if(isset($parsedResponse['access_token'])){
+            $this->authentication->setAccessToken($parsedResponse['access_token']);
+        }
+
+        if(isset($parsedResponse['refresh_token'])){
+            $this->authentication->setAccessToken($parsedResponse['refresh_token']);
+        }
+
+        header('location: ' . $this->request->getUri());
+        exit();
     }
 
     /**
@@ -182,7 +229,7 @@ class OAuth2Proxy{
     
         if($response->getStatusCode() === 401 && $this->isGrantTypeEnabled('refresh_token')){
             // Try to renew token   
-            if($this->authentication->renewAccessToken() || true){ // FIXME:
+            if($this->authentication->renewAccessToken($this->apiHost, $this->clientId, $this->clientSecret) || true){ // FIXME:
                 $proxy->setAuthorization('Bearer ' . $this->authentication->getAccessToken());
             }
             $response = $proxy->run();
@@ -199,13 +246,30 @@ class OAuth2Proxy{
      * @return void
      */
     protected function handleSpaProxy(){
-        if($this->authentication->isAuthorized()){
-            if(is_file($this->spaIndex)){
-                echo file_get_contents($this->spaIndex);
-                return;
+        $route = str_replace(['../', './'], '', $this->request->getPathInfo());
+
+        if($this->authentication->isAuthorized() || true){
+            if(is_file($this->spaIndex . '/' . $route)){
+
+                $extension = (pathinfo($this->spaIndex . '/' . $route))['extension'];
+                if(in_array($extension, self::OVERRIDE_MIME_CONTENT_TYPE)){
+                    header("Content-Type: " . self::OVERRIDE_MIME_CONTENT_TYPE[$extension]);
+                }else{
+                    header("Content-Type: " . mime_content_type($this->spaIndex . '/' . $route));
+                }
+                readfile($this->spaIndex . '/' . $route);
+                exit;
+            }else{
+                if(is_file($this->spaIndex . '/index.html')){
+                    header("Content-Type: " . mime_content_type($this->spaIndex . '/' . $route));
+                    readfile($this->spaIndex . '/index.html');
+                    exit;
+                }else{
+                    http_response_code(404);
+                    exit;
+                }
             }
             
-            http_response_code(404);
         }
     }
 
@@ -221,13 +285,11 @@ class OAuth2Proxy{
             // Authorization code callback
             if($route === '/callback'){
                 $this->handleAuthorizationCodeCallback();
-                return;
             }
 
             // API proxy
             if(substr($route, 0, 5) === '/api/'){
                 $this->handleApiProxy();
-                return;
             }
 
             // SPA proxy
