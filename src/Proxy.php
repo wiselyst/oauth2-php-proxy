@@ -38,18 +38,18 @@ class Proxy{
      * @var HttpClientInterface
      */
     protected $client;
-    
+
     /**
      * Headers to skip when returning server response
      * @var array
      */
     protected const SKIP_HEADERS = ['transfer-encoding', 'date', 'host', 'connection'];
 
-    public function __construct(string $serverHost){
+    public function __construct(string $serverHost, HttpClientInterface $httpClient, Request $request){
         $this->serverHost = $serverHost;
 
-        $this->client = HttpClient::create();
-        $this->serverRequest = Request::createFromGlobals();
+        $this->client = $httpClient; HttpClient::create();
+        $this->serverRequest = $request; //Request::createFromGlobals();
         $this->proxyRequest = $this->serverRequest;
     }
 
@@ -83,7 +83,7 @@ class Proxy{
      * @param ResponseInterface $response
      * @return void
      */
-    public function dispatch(ResponseInterface $response){
+    public static function dispatch(ResponseInterface $response){
         ob_clean();
 
         // Headers

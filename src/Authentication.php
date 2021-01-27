@@ -3,6 +3,7 @@
 namespace Wiselyst\OAuth2Proxy;
 
 use Symfony\Component\HttpFoundation\Session\Session;
+use Symfony\Component\HttpFoundation\Session\SessionInterface;
 use Symfony\Contracts\HttpClient\HttpClientInterface;
 
 class Authentication{
@@ -18,7 +19,6 @@ class Authentication{
      */
     protected $httpClient;
 
-
     /**
      * Session name for the access token
      * @var string
@@ -31,8 +31,8 @@ class Authentication{
      */
     const REFRESH_TOKEN_SESSION = 'oauth_refresh_token';
 
-    public function __construct(HttpClientInterface $httpClient){
-        $this->session = new Session();
+    public function __construct(HttpClientInterface $httpClient, SessionInterface $session){
+        $this->session = $session;
         $this->httpClient = $httpClient;
     }
 
@@ -52,23 +52,19 @@ class Authentication{
         return $this->session->get(self::REFRESH_TOKEN_SESSION);
     }
 
-    public function isAuthorized(){
-        if($this->getAccessToken()){ //TODO: check if user is authenticated
-            return true;
-        }
-
-        return false;
-    }
-
     /**
      * Attempt an access token refresh
      * @return true
      */
     public function renewAccessToken($host, $clientId, $clientSecret){
+        if(!$this->getAccessToken()){
+            return false;
+        }
+
         $this->session->clear();
         $this->session->migrate(false);
 
-        $response = $this->httpClient->request('POST', $host . '/oauth/token', [
+        $response = $this->httpClient->request('POST', $host . OAuth2Proxy::REMOTE_TOKEN_ENDPOINT, [
             'body' => [
                 'grant_type' => 'refresh_token',
                 'client_id' => $clientId,
