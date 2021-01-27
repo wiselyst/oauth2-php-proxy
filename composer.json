@@ -2,7 +2,7 @@
     "name": "wiselyst/oauth2-php-proxy",
     "type": "library",
     "description": "Simple PHP proxy based on symfony/http-client",
-    "keywords": ["proxy", "http", "lightweight"],
+    "keywords": ["proxy", "oauth", "lightweight", "spa", "angular", "react", "single page application"],
     "authors": [
         {
             "name": "Wiselyst",

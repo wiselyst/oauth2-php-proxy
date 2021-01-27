@@ -158,7 +158,7 @@ class Authentication{
     }
 
     /**
-     * Clears the current section
+     * Clears all sessions attributes and refresh the session id
      * @return void
      */
     public function logout(){
