@@ -116,7 +116,7 @@ class OAuth2Proxy{
      * SPA directory
      * @var string
      */
-    protected $spaDir;
+    protected $spaDir = null;
 
     /**
      * Require authentication for SPA
@@ -328,6 +328,10 @@ class OAuth2Proxy{
      * @return void
      */
     protected function handleSpaProxy(){
+        if($this->spaDir === null){
+            throw new Exception("Unable to process a SPA proxy request, single page application directory is not set");
+        }
+
         $route = str_replace(['../', './'], '', $this->request->getPathInfo());
 
         if($this->requireAuthentication && !$this->authentication->getAccessToken()){
@@ -358,40 +362,46 @@ class OAuth2Proxy{
     public function handleTokenRequest(){
         // Grant type
         $grantType = $this->request->request->get('grant_type');
-        if(!in_array($grantType, ['client_credentials', 'password'])){
-            $this->dispatchJSONResponse([
-                'status' => false,
-                'message' => 'Invalid grant type'
-            ], 400);
+        if(!$this->isGrantTypeEnabled($grantType)){
+            throw new Exception("Invalid grant type");
         }
 
-        $login = [];
+        // Get username and password from body
+        $username = '';
+        $password = '';
         if($grantType === 'password'){
-            $login['username'] = $this->request->request->get('username') ?? '';
-            $login['password'] = $this->request->request->get('password') ?? '';
+            $username = $this->request->request->get('username') ?? '';
+            $password = $this->request->request->get('password') ?? '';
         }
 
+        // Request access token
         $tokenRequest = $this->authentication->requestAccessToken(
             $this->apiHost,
             $grantType,
             $this->clientId,
             $this->clientSecret,
-            $login['username'] ?? '',
-            $login['password'] ?? ''
+            $username,
+            $password
         );
 
         if($tokenRequest->getStatusCode() === 200){
+            // Hide token on success response
             $this->dispatchJSONResponse([
                 'status' => true,
                 'message' => 'Authenticated'
             ]);
         }
 
-        
+        // Return server response if the request was not successful
         $this->dispatchJSONResponse(json_decode($tokenRequest->getContent(false), true), $tokenRequest->getStatusCode());
     }
 
 
+    /**
+     * Dispatch a JSON Response
+     * @param array $data Response content
+     * @param int $status HTTP Status code
+     */
     protected function dispatchJSONResponse(array $data, int $status = 200){
         header("Content-Type: application/json");
         http_response_code($status);
