@@ -22,6 +22,12 @@ class Proxy{
     protected $proxyRequest;
 
     /**
+     * Proxy path info
+     * @var string
+     */
+    protected $proxyPathInfo;
+
+    /**
      * Authorization header
      * @var array
      */
@@ -49,23 +55,45 @@ class Proxy{
         $this->serverHost = $serverHost;
 
         $this->client = $httpClient; HttpClient::create();
-        $this->serverRequest = $request; //Request::createFromGlobals();
+        $this->serverRequest = $request;
         $this->proxyRequest = $this->serverRequest;
+        $this->proxyPathInfo = $this->serverRequest->getPathInfo();
     }
 
-    public function run() : ResponseInterface{
+    /**
+     * Get proxy path info
+     * @see Symfony\Component\HttpFoundation\Request@getPathInfo
+     * @return string
+     */
+    public function getProxyPathInfo(){
+        return $this->proxyPathInfo;
+    }
 
-        $body = count($this->serverRequest->request->all()) !== 0 ? $this->serverRequest->request->all() : $this->serverRequest->getContent();
-        
-        $response = $this->client->request($this->serverRequest->getMethod(), $this->serverHost . $this->serverRequest->getPathInfo(), [
+    /**
+     * Set proxy path info
+     * @see Symfony\Component\HttpFoundation\Request@getPathInfo
+     * @return string
+     */
+    public function setProxyPathInfo(string $pathInfo){
+        $this->proxyPathInfo = $pathInfo;
+    }
+
+    /**
+     * Run a proxy request
+     * @return ResponseInterface
+     */
+    public function run() : ResponseInterface{        
+        $response = $this->client->request($this->serverRequest->getMethod(), $this->serverHost . $this->getProxyPathInfo(), [
             'headers' => array_merge(
                 $this->serverRequest->server->getHeaders(),
                 $this->authorizationHeader
             ),
-            'body' => $body,
+            'body' => count($this->serverRequest->request->all()) !== 0 ? $this->serverRequest->request->all() : $this->serverRequest->getContent(),
             'query' => $this->serverRequest->query->all()
         ]);
 
+        $response->getContent(false); // This is to not throw an exception in case of an response error
+        
         return $response;
     }
 
@@ -77,16 +105,17 @@ class Proxy{
         $this->authorizationHeader = ['Authorization' => $value];
     }
 
-
     /**
-     * Emit ResponseInterface
+     * Emit a ResponseInterface from the run() method
+     * 
      * @param ResponseInterface $response
      * @return void
      */
     public static function dispatch(ResponseInterface $response){
+        // Clean the output buffer
         ob_clean();
 
-        // Headers
+        // Set response headers
         foreach ($response->getHeaders(false) as $name => $values) {
             if(!in_array(strtolower($name), self::SKIP_HEADERS)){
                 foreach($values as $value){
@@ -95,10 +124,10 @@ class Proxy{
             }
         }
 
-        // Status code
+        // Set the response code
         http_response_code($response->getStatusCode());
 
-        // Content
+        // Output content
         echo $response->getContent(false);
         exit();
     }

@@ -11,30 +11,6 @@ use League\MimeTypeDetection\ExtensionMimeTypeDetector;
 class OAuth2Proxy{
 
     /**
-     * Endpoint for token and access_token requests
-     * @var string
-     */
-    public const REMOTE_TOKEN_ENDPOINT = '/token';
-
-    /**
-     * Endpoint for authorization code redirect
-     * @var string
-     */
-    public const REMOTE_AUTHORIZE_ENDPOINT = '/authorize';
-
-    /**
-     * Supported grant types
-     * @var string[]
-     */
-    protected const ALLOWED_GRANT_TYPES = ['authorization_code', 'refresh_token'];
-
-    /**
-     * Enabled grant types
-     * @var string[]
-     */
-    private $enabledGrantTypes = [];
-
-    /**
      * Authentication
      * @var Authentication
      */
@@ -53,22 +29,36 @@ class OAuth2Proxy{
     protected $httpClient;
 
     /**
-     * API server host
-     * @var string
-     */
-    protected $apiHost;
-
-    /**
-     * SPA directory
-     * @var string
-     */
-    protected $spaDir;
-
-    /**
      * Request
      * @var Request
      */
     protected $request;
+
+    public function __construct(){
+        // Initialize dependencies
+        $this->session = new Session();
+        $this->httpClient = HttpClient::create();
+        $this->authentication = new Authentication($this->httpClient, $this->session);
+
+        // Start sessions
+        if(!$this->session->isStarted()){
+            $this->session->start();
+        }
+
+        // Create request from globals
+        $this->request = Request::createFromGlobals();
+    }
+
+    
+    //----------------------------------------------
+    // AUTHENTICATION
+    //----------------------------------------------
+
+    /**
+     * API server host
+     * @var string
+     */
+    protected $apiHost;
 
     /**
      * Client ID
@@ -83,36 +73,18 @@ class OAuth2Proxy{
     protected $clientSecret = "";
 
     /**
-     * Redirect URI
-     * @var string
-     */
-    protected $redirectUri = "";
-
-    /**
      * Scope
      * @var string
      */
     protected $scope = "";
 
     /**
-     * Require authentication for SPA
-     * @var bool
+     * Set API host
+     * @param string apiHost API Server host (eg. http://api.localhost:1234)
+     * @return void
      */
-    protected $requireAuthentication = false;
-    
-
-    public function __construct(){
-        $this->session = new Session();
-        $this->httpClient = HttpClient::create();
-
-        $this->authentication = new Authentication($this->httpClient, $this->session);
-
-
-        if(!$this->session->isStarted()){
-            $this->session->start();
-        }
-
-        $this->request = Request::createFromGlobals();
+    public function setApiHost(string $apiHost): void{
+        $this->apiHost = $apiHost;
     }
 
     /**
@@ -135,14 +107,22 @@ class OAuth2Proxy{
         $this->scope = $scope;
     }
 
+
+    //----------------------------------------------
+    // SPA
+    //----------------------------------------------
+
     /**
-     * Set API host
-     * @param string apiHost API Server host (eg. http://api.localhost:1234)
-     * @return void
+     * SPA directory
+     * @var string
      */
-    public function setApiHost(string $apiHost): void{
-        $this->apiHost = $apiHost;
-    }
+    protected $spaDir;
+
+    /**
+     * Require authentication for SPA
+     * @var bool
+     */
+    protected $requireAuthentication = false;
 
     /**
      * Set SPA directory
@@ -162,12 +142,36 @@ class OAuth2Proxy{
         $this->requireAuthentication = $require;
     }
 
+    //----------------------------------------------
+    // GRANT TYPE
+    //----------------------------------------------
+
+    /**
+     * Supported grant types
+     * @var string[]
+     */
+    protected const ALLOWED_GRANT_TYPES = ['authorization_code', 'refresh_token', 'client_credentials', 'password'];
+
+    /**
+     * Enabled grant types
+     * @var string[]
+     */
+    private $enabledGrantTypes = [];
+
     /**
      * Enable grant type
      * @param string $grantType
      * @return void
      */
     public function enableGrantType(string $grantType): void{
+        if($grantType === 'authorization_code' && ($this->isGrantTypeEnabled('client_credentials') || $this->isGrantTypeEnabled('password'))){
+            throw new \Exception('Unable to enable grant type "' . $grantType . '" while "client_credentials" or "password" is enabled');
+        }
+
+        if(($grantType === 'client_credentials' || $grantType === 'password') && $this->isGrantTypeEnabled('authorization_code')){
+            throw new \Exception('Unable to enable grant type "' . $grantType . '" while "authorization_code"');
+        }
+
         if(in_array($grantType, self::ALLOWED_GRANT_TYPES)){
             if(!$this->isGrantTypeEnabled($grantType)){
                 $this->enabledGrantTypes[] = $grantType;
@@ -198,6 +202,22 @@ class OAuth2Proxy{
     public function isGrantTypeEnabled(string $grantType) : bool{
         return in_array($grantType, $this->enabledGrantTypes);
     }
+
+    //----------------------------------------------
+    // OAUTH2 FLOW METHODS
+    //----------------------------------------------
+
+    /**
+     * Endpoint for token and access_token requests
+     * @var string
+     */
+    public const REMOTE_TOKEN_ENDPOINT = '/token';
+
+    /**
+     * Endpoint for authorization code redirect
+     * @var string
+     */
+    public const REMOTE_AUTHORIZE_ENDPOINT = '/authorize';
 
     /**
      * Handle Authorization Code redirect request
@@ -265,16 +285,32 @@ class OAuth2Proxy{
      */
     protected function handleApiProxy(){
         $proxy = new Proxy($this->apiHost, $this->httpClient, $this->request);
+        $pathInfo = $proxy->getProxyPathInfo();
+        if(substr($pathInfo, 0, 5) === '/api/'){
+            $proxy->setProxyPathInfo(
+                substr($pathInfo, 4)
+            );
+        }
+        
 
         if($this->authentication->getAccessToken()){
             $proxy->setAuthorization('Bearer ' . $this->authentication->getAccessToken());
+        }else{
+            if($this->isGrantTypeEnabled('client_credentials')){
+                // Attempt to get a token
+                $this->authentication->requestAccessToken($this->apiHost, 'client_credentials', $this->clientId, $this->clientSecret);
+        
+                if($this->authentication->getAccessToken()){
+                    $proxy->setAuthorization('Bearer ' . $this->authentication->getAccessToken());
+                }
+            }
         }
     
         $response = $proxy->run();
     
         if($response->getStatusCode() === 401 && $this->isGrantTypeEnabled('refresh_token')){
             // Try to renew token   
-            if($this->authentication->renewAccessToken($this->apiHost, $this->clientId, $this->clientSecret)){
+            if($this->authentication->refreshAccessToken($this->apiHost, $this->clientId, $this->clientSecret)){
                 $proxy->setAuthorization('Bearer ' . $this->authentication->getAccessToken());
             }
             $response = $proxy->run();
@@ -319,6 +355,50 @@ class OAuth2Proxy{
         }        
     }
 
+    public function handleTokenRequest(){
+        // Grant type
+        $grantType = $this->request->request->get('grant_type');
+        if(!in_array($grantType, ['client_credentials', 'password'])){
+            $this->dispatchJSONResponse([
+                'status' => false,
+                'message' => 'Invalid grant type'
+            ], 400);
+        }
+
+        $login = [];
+        if($grantType === 'password'){
+            $login['username'] = $this->request->request->get('username') ?? '';
+            $login['password'] = $this->request->request->get('password') ?? '';
+        }
+
+        $tokenRequest = $this->authentication->requestAccessToken(
+            $this->apiHost,
+            $grantType,
+            $this->clientId,
+            $this->clientSecret,
+            $login['username'] ?? '',
+            $login['password'] ?? ''
+        );
+
+        if($tokenRequest->getStatusCode() === 200){
+            $this->dispatchJSONResponse([
+                'status' => true,
+                'message' => 'Authenticated'
+            ]);
+        }
+
+        
+        $this->dispatchJSONResponse(json_decode($tokenRequest->getContent(false), true), $tokenRequest->getStatusCode());
+    }
+
+
+    protected function dispatchJSONResponse(array $data, int $status = 200){
+        header("Content-Type: application/json");
+        http_response_code($status);
+        echo json_encode($data);
+        exit();
+    }
+
     /**
      * Run the proxy
      * @return void
@@ -334,6 +414,11 @@ class OAuth2Proxy{
         // Authorization code redirect
         if($route === '/redirect' && $this->isGrantTypeEnabled('authorization_code')){
             $this->handleAuthorizationCodeRedirect();
+        }
+
+        // Handle token request
+        if($route === '/token' && ($this->isGrantTypeEnabled('client_credentials') || $this->isGrantTypeEnabled('password')) ){
+            $this->handleTokenRequest();
         }
 
         // API proxy
