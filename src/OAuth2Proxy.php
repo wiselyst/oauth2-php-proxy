@@ -3,11 +3,14 @@
 namespace Wiselyst\OAuth2Proxy;
 
 use Exception;
+use Wiselyst\OAuth2Proxy\Proxy;
+use Wiselyst\OAuth2Proxy\Authentication;
 use Symfony\Component\HttpClient\HttpClient;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Session\Session;
 use Symfony\Contracts\HttpClient\HttpClientInterface;
 use League\MimeTypeDetection\ExtensionMimeTypeDetector;
+
 class OAuth2Proxy{
 
     /**
@@ -113,6 +116,13 @@ class OAuth2Proxy{
     //----------------------------------------------
 
     /**
+     * CSRF Protection
+     *
+     * @var bool
+     */
+    protected $csrfProtection = false;
+
+    /**
      * SPA directory
      * @var string
      */
@@ -135,11 +145,21 @@ class OAuth2Proxy{
 
     /**
      * Require SPA Authentication
-     * @param bool $require
+     * @param boolean $require
      * @return void
      */
     public function requireAuthentication(bool $require = true){
         $this->requireAuthentication = $require;
+    }
+
+    /**
+     * Enable or disable CSRF protection
+     *
+     * @param boolean $status
+     * @return void
+     */
+    public function csrfProtection(bool $status = true){
+        $this->csrfProtection = $status;
     }
 
     //----------------------------------------------
@@ -333,6 +353,21 @@ class OAuth2Proxy{
         }
 
         $route = str_replace(['../', './'], '', $this->request->getPathInfo());
+
+        // Set an X-XSRF-TOKEN
+        if($this->csrfProtection){
+            $xsrfToken = $this->session->get('X-XSRF-TOKEN');
+            if($xsrfToken === null || !isset($_COOKIE['X-XSRF-TOKEN'])){
+                $xsrfToken = base64_encode(openssl_random_pseudo_bytes(128));
+                $this->session->set('X-XSRF-TOKEN', $xsrfToken);
+                
+                if(isset($_COOKIE['X-XSRF-TOKEN'])){
+                    unset($_COOKIE['X-XSRF-TOKEN']);
+                }
+
+                setcookie("X-XSRF-TOKEN", $xsrfToken, 0, "",  "" ,false, true);
+            }
+        }
 
         if($this->requireAuthentication && !$this->authentication->getAccessToken()){
             if($this->isGrantTypeEnabled('authorization_code')){
