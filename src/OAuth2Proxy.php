@@ -5,6 +5,7 @@ namespace Wiselyst\OAuth2Proxy;
 use Exception;
 use Wiselyst\OAuth2Proxy\Proxy;
 use Wiselyst\OAuth2Proxy\Authentication;
+use Wiselyst\OAuth2Proxy\CsrfProtection;
 use Symfony\Component\HttpClient\HttpClient;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Session\Session;
@@ -37,19 +38,27 @@ class OAuth2Proxy{
      */
     protected $request;
 
+    /**
+     * CSRF Protection service
+     *
+     * @var CsrfProtection
+     */
+    protected $csrf;
+
     public function __construct(){
         // Initialize dependencies
         $this->session = new Session();
+        $this->request = Request::createFromGlobals();
         $this->httpClient = HttpClient::create();
-        $this->authentication = new Authentication($this->httpClient, $this->session);
+        $this->csrf = new CsrfProtection($this->session, $this->request);
+        $this->authentication = new Authentication($this->httpClient, $this->session, $this->csrf);
 
         // Start sessions
         if(!$this->session->isStarted()){
             $this->session->start();
         }
 
-        // Create request from globals
-        $this->request = Request::createFromGlobals();
+
     }
 
     
@@ -120,7 +129,7 @@ class OAuth2Proxy{
      *
      * @var bool
      */
-    protected $csrfProtection = false;
+    protected $csrfProtectionEnabled = false;
 
     /**
      * SPA directory
@@ -159,7 +168,7 @@ class OAuth2Proxy{
      * @return void
      */
     public function csrfProtection(bool $status = true){
-        $this->csrfProtection = $status;
+        $this->csrfProtectionEnabled = $status;
     }
 
     //----------------------------------------------
@@ -272,7 +281,7 @@ class OAuth2Proxy{
 
         // Logout
         $this->authentication->logout();
-        
+
         // Auth code -> token
         $response = $this->httpClient->request('POST', $this->apiHost . self::REMOTE_TOKEN_ENDPOINT, [
             'body' => [
@@ -312,7 +321,8 @@ class OAuth2Proxy{
             );
         }
         
-
+        // If an access token is set, run a request with the access_token
+        // otherwise request an access token if "client_credentials" is enabled
         if($this->authentication->getAccessToken()){
             $proxy->setAuthorization('Bearer ' . $this->authentication->getAccessToken());
         }else{
@@ -328,19 +338,47 @@ class OAuth2Proxy{
     
         $response = $proxy->run();
     
-        if($response->getStatusCode() === 401 && $this->isGrantTypeEnabled('refresh_token')){
-            // Try to renew token   
-            if($this->authentication->refreshAccessToken($this->apiHost, $this->clientId, $this->clientSecret)){
-                $proxy->setAuthorization('Bearer ' . $this->authentication->getAccessToken());
-            }
-            $response = $proxy->run();
-            if($response->getStatusCode() === 401){
+        // Handle an unauthorized request
+        if($response->getStatusCode() === 401){
+            if($this->authentication->getGrantType() === 'password' && $this->isGrantTypeEnabled('refresh_token')){
+                // Refresh an access token
+                // Request a new access token if the token was previously generated with "password"
+                $this->authentication->refreshAccessToken($this->apiHost, $this->clientId, $this->clientSecret);
+            }elseif($this->authentication->getGrantType() === 'client_credentials' && $this->isGrantTypeEnabled('client_credentials')){
+                // Request a new access token
+                // Request a new access token if the token was previously generated with "client_credentials"
+                $this->authentication->requestAccessToken($this->apiHost, 'client_credentials', $this->clientId, $this->clientSecret);
+            }else{
                 $this->authentication->logout();
+            }
+            
+            // Check if the access token has been renewed
+            if($this->authentication->getAccessToken()){
+                // Repeat the request with the new access token
+                $proxy->setAuthorization('Bearer ' . $this->authentication->getAccessToken());
+                $response = $proxy->run();
+
+                // Handle a second unauthorized request
+                // If the previous token was requested with "password" try to generate a "client_credentials" token
+                if($response->getStatusCode() === 401 && $this->authentication->getGrantType() === 'password' && $this->isGrantTypeEnabled('client_credentials')){
+                    // Request a new access token using "client_credentials"
+                    $this->authentication->requestAccessToken($this->apiHost, 'client_credentials', $this->clientId, $this->clientSecret);
+
+                    if($this->authentication->getAccessToken()){
+                        // Repeat the request with the new access token
+                        $proxy->setAuthorization('Bearer ' . $this->authentication->getAccessToken());
+                        $response = $proxy->run();
+
+                        if($response->getStatusCode() === 401){
+                            $this->authentication->logout();
+                        }
+                    }    
+                }
             }
         }
     
+        // Dispatch the API response
         Proxy::dispatch($response);
-        exit();
     }
 
     /**
@@ -352,22 +390,9 @@ class OAuth2Proxy{
             throw new Exception("Unable to process a SPA proxy request, single page application directory is not set");
         }
 
+        $this->csrf->generateCsrfToken();
+
         $route = str_replace(['../', './'], '', $this->request->getPathInfo());
-
-        // Set an X-XSRF-TOKEN
-        if($this->csrfProtection){
-            $xsrfToken = $this->session->get('X-XSRF-TOKEN');
-            if($xsrfToken === null || !isset($_COOKIE['X-XSRF-TOKEN'])){
-                $xsrfToken = base64_encode(openssl_random_pseudo_bytes(128));
-                $this->session->set('X-XSRF-TOKEN', $xsrfToken);
-                
-                if(isset($_COOKIE['X-XSRF-TOKEN'])){
-                    unset($_COOKIE['X-XSRF-TOKEN']);
-                }
-
-                setcookie("X-XSRF-TOKEN", $xsrfToken, 0, "",  "" ,false, true);
-            }
-        }
 
         if($this->requireAuthentication && !$this->authentication->getAccessToken()){
             if($this->isGrantTypeEnabled('authorization_code')){
@@ -468,6 +493,9 @@ class OAuth2Proxy{
 
         // API proxy
         if(substr($route, 0, 5) === '/api/'){
+            if($this->csrfProtectionEnabled){
+                $this->csrf->validateCsrfToken(true);
+            }
             $this->handleApiProxy();
         }
 

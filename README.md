@@ -27,6 +27,9 @@ try{
     // Enable grant types
     $proxy->enableGrantType('password');
     $proxy->enableGrantType('refresh_token');
+
+    // Enable CSRF Protection (optional)
+    $proxy->csrfProtection(true);
     
     // OAuth remote server
     $proxy->setApiHost('http://localhost:8000/myapp');
@@ -50,6 +53,22 @@ It is possible to require the client to be authenticated in order to process Sin
 ```php
 $proxy->requireAuthentication();
 ```
+
+### CSRF Protection
+If enabled, cross-site request forgeries protection, will set a cookie named `XSRF-TOKEN` with a token. The token must be sent as a request header on each /api or /token request.
+
+Example (jQuery):
+```js
+$.ajax{ // or use $.ajaxSetup
+    // ...
+    headers: {
+        'X-SRF-TOKEN': Cookie.get('XSRF-TOKEN') // See js-cookie
+    }
+    // ...
+}
+```
+Angular Http Client or Axios will automatically include the `XSRF-TOKEN` value.
+
 ### Proxy endpoints
 1. /callback - Authorization code callback
 2. /redirect - Redirect for authorization code request
@@ -59,7 +78,7 @@ $proxy->requireAuthentication();
 Everything else is rewritten to the Single Page Application. 
 
 ### OAuth endpoints
-The default OAuth2 endpoint can be overwritten as follows:
+The default OAuth2 endpoints can be overwritten as follows:
 ```php
 OAuth2Proxy::REMOTE_TOKEN_ENDPOINT = '/token';
 OAuth2Proxy::REMOTE_AUTHORIZE_ENDPOINT = '/authorize';
@@ -86,9 +105,18 @@ location / {
   }
 }
 ```
+### Suggested directory structure
+```
+- public (Document root)
+--- .htaccess (Apache only)
+--- index.php
+
+- static (SPA dir)
+- vendor
+- package.json
+```
 
 ## Improvements
-- Implement CSRF protection
 - Support CORS policy
 - Complete scope support
 - Proxy endpoints customization

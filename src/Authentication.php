@@ -19,9 +19,17 @@ class Authentication{
      */
     protected $httpClient;
 
-    public function __construct(HttpClientInterface $httpClient, SessionInterface $session){
+    /**
+     * CSRF Protection service
+     *
+     * @var CsrfProtection
+     */
+    protected $csrf;
+
+    public function __construct(HttpClientInterface $httpClient, SessionInterface $session, CsrfProtection $csrf){
         $this->session = $session;
         $this->httpClient = $httpClient;
+        $this->csrf = $csrf;
     }
 
     /**
@@ -35,6 +43,12 @@ class Authentication{
      * @var string
      */
     const REFRESH_TOKEN_SESSION = 'oauth_refresh_token';
+
+    /**
+     * Session name to store the grant type
+     * @var string
+     */
+    const GRANT_TYPE_SESSION = 'oauth_grant_type';
 
 
     /**
@@ -70,6 +84,22 @@ class Authentication{
     }
 
     /**
+     * Set the grant type used for the authentication
+     * @param string $grantType
+     */
+    protected function setGrantType(string $grantType){
+        return $this->session->set(self::GRANT_TYPE_SESSION, $grantType);
+    }
+
+    /**
+     * Get the grant type used for the authentication
+     * @return string
+     */
+    public function getGrantType(){
+        return $this->session->get(self::GRANT_TYPE_SESSION);
+    }
+
+    /**
      * Request and store a new access token
      * 
      * @param string $host Remote host
@@ -101,15 +131,17 @@ class Authentication{
 
         $parsedResponse = json_decode($response->getContent(false), true);
         
-        if(isset($parsedResponse['refresh_token'])){
-            $this->setRefreshToken($parsedResponse['refresh_token']);
-        }
+        if($response->getStatusCode() === 200){
+            if(isset($parsedResponse['refresh_token'])){
+                $this->setRefreshToken($parsedResponse['refresh_token']);
+            }
+    
+            if(isset($parsedResponse['access_token'])){
+                $this->setAccessToken($parsedResponse['access_token']);
+            }
 
-        if(isset($parsedResponse['access_token'])){
-            $this->setAccessToken($parsedResponse['access_token']);
+            $this->setGrantType($grantType);
         }
-
-        $all = $this->session->all();
         
         return $response;
     }
@@ -164,5 +196,6 @@ class Authentication{
     public function logout(){
         $this->session->clear();
         $this->session->migrate(true);
+        $this->csrf->generateCsrfToken(true);
     }
 }
