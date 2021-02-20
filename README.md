@@ -20,6 +20,10 @@ composer require wiselyst/oauth2-php-proxy
 
 ## Usage
 ```php
+require_once __DIR__ . "/../vendor/autoload.php";
+
+use Wiselyst\OAuth2Proxy\OAuth2Proxy;
+
 try{
     // Initialize the proxy
     $proxy = new OAuth2Proxy();
