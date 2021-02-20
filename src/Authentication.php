@@ -111,7 +111,7 @@ class Authentication{
      * 
      * @return ResponseInterface
      */
-    public function requestAccessToken(string $host, string $grantType, string $clientId, string $clientSecret, string $username = '', string $password = ''){
+    public function requestAccessToken(string $host, string $grantType, string $clientId, string $clientSecret, string $username = '', string $password = '', string $scope = ''){
         
         $this->logout();
 
@@ -119,13 +119,14 @@ class Authentication{
         $body['grant_type'] = $grantType;
         $body['client_id'] = $clientId;
         $body['client_secret'] = $clientSecret;
+        $body['scope'] = $scope;
 
         if($grantType === 'password'){
             $body['username'] = $username;
             $body['password'] = $password;
         }
         
-        $response = $this->httpClient->request('POST', $host . OAuth2Proxy::REMOTE_TOKEN_ENDPOINT, [
+        $response = $this->httpClient->request('POST', $host . OAuth2Proxy::$REMOTE_TOKEN_ENDPOINT, [
             'body' => $body
         ]);
 
@@ -162,7 +163,7 @@ class Authentication{
         }
 
         // Request a new token
-        $response = $this->httpClient->request('POST', $host . OAuth2Proxy::REMOTE_TOKEN_ENDPOINT, [
+        $response = $this->httpClient->request('POST', $host . OAuth2Proxy::$REMOTE_TOKEN_ENDPOINT, [
             'body' => [
                 'grant_type' => 'refresh_token',
                 'client_id' => $clientId,

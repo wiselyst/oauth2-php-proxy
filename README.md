@@ -34,6 +34,7 @@ try{
     // OAuth remote server
     $proxy->setApiHost('http://localhost:8000/myapp');
     $proxy->setClientCredentials('clientid', 'clientsecret');
+    $proxy->setScope('read write');
     
     // Single Page Application directory
     $proxy->setSpaDir(__DIR__ . '/static');
@@ -80,9 +81,17 @@ Everything else is rewritten to the Single Page Application.
 ### OAuth endpoints
 The default OAuth2 endpoints can be overwritten as follows:
 ```php
-OAuth2Proxy::REMOTE_TOKEN_ENDPOINT = '/token';
-OAuth2Proxy::REMOTE_AUTHORIZE_ENDPOINT = '/authorize';
+OAuth2Proxy::$REMOTE_TOKEN_ENDPOINT = '/token';
+OAuth2Proxy::$REMOTE_AUTHORIZE_ENDPOINT = '/authorize';
 ```
+### Proxy endpoints
+```php
+OAuth2Proxy::$PROXY_TOKEN_ENDPOINT = '/token';
+OAuth2Proxy::$PROXY_CALLBACK_ENDPOINT = '/callback';
+OAuth2Proxy::$PROXY_REDIRECT_ENDPOINT = '/redirect';
+OAuth2Proxy::$PROXY_API_ENDPOINT = '/api';
+```
+
 ### Server configuration
 The server should be configured to rewrite all requests to your proxy script
 
@@ -118,5 +127,3 @@ location / {
 
 ## Improvements
 - Support CORS policy
-- Complete scope support
-- Proxy endpoints customization

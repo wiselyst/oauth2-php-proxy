@@ -240,13 +240,13 @@ class OAuth2Proxy{
      * Endpoint for token and access_token requests
      * @var string
      */
-    public const REMOTE_TOKEN_ENDPOINT = '/token';
+    public static $REMOTE_TOKEN_ENDPOINT = '/token';
 
     /**
      * Endpoint for authorization code redirect
      * @var string
      */
-    public const REMOTE_AUTHORIZE_ENDPOINT = '/authorize';
+    public static $REMOTE_AUTHORIZE_ENDPOINT = '/authorize';
 
     /**
      * Handle Authorization Code redirect request
@@ -257,13 +257,13 @@ class OAuth2Proxy{
 
         $query = http_build_query([
             'client_id' => $this->clientId,
-            'redirect_uri' => $this->request->getSchemeAndHttpHost() . $this->request->getBasePath() . '/callback',
+            'redirect_uri' => $this->request->getSchemeAndHttpHost() . $this->request->getBasePath() . self::$PROXY_CALLBACK_ENDPOINT,
             'response_type' => 'code',
             'scope' => $this->scope,
             'state' => $state,
         ]);
 
-        header('location: ' . $this->apiHost . self::REMOTE_AUTHORIZE_ENDPOINT . '?' . $query);
+        header('location: ' . $this->apiHost . self::$REMOTE_AUTHORIZE_ENDPOINT . '?' . $query);
         exit();
     }
 
@@ -283,12 +283,12 @@ class OAuth2Proxy{
         $this->authentication->logout();
 
         // Auth code -> token
-        $response = $this->httpClient->request('POST', $this->apiHost . self::REMOTE_TOKEN_ENDPOINT, [
+        $response = $this->httpClient->request('POST', $this->apiHost . self::$REMOTE_TOKEN_ENDPOINT, [
             'body' => [
                 'grant_type' => 'authorization_code',
                 'client_id' => $this->clientId,
                 'client_secret' => $this->clientSecret,
-                'redirect_uri' => $this->request->getSchemeAndHttpHost() . $this->request->getBasePath() . '/callback',
+                'redirect_uri' => $this->request->getSchemeAndHttpHost() . $this->request->getBasePath() . self::$PROXY_CALLBACK_ENDPOINT,
                 'code' => $this->request->query->get('code')
             ]
         ]);
@@ -315,9 +315,9 @@ class OAuth2Proxy{
     protected function handleApiProxy(){
         $proxy = new Proxy($this->apiHost, $this->httpClient, $this->request);
         $pathInfo = $proxy->getProxyPathInfo();
-        if(substr($pathInfo, 0, 5) === '/api/'){
+        if(substr($pathInfo, 0, (strlen(self::$PROXY_API_ENDPOINT) + 1)) === (self::$PROXY_API_ENDPOINT . '/')){
             $proxy->setProxyPathInfo(
-                substr($pathInfo, 4)
+                substr($pathInfo, strlen(self::$PROXY_API_ENDPOINT))
             );
         }
         
@@ -328,7 +328,7 @@ class OAuth2Proxy{
         }else{
             if($this->isGrantTypeEnabled('client_credentials')){
                 // Attempt to get a token
-                $this->authentication->requestAccessToken($this->apiHost, 'client_credentials', $this->clientId, $this->clientSecret);
+                $this->authentication->requestAccessToken($this->apiHost, 'client_credentials', $this->clientId, $this->clientSecret, $this->scope);
         
                 if($this->authentication->getAccessToken()){
                     $proxy->setAuthorization('Bearer ' . $this->authentication->getAccessToken());
@@ -347,7 +347,7 @@ class OAuth2Proxy{
             }elseif($this->authentication->getGrantType() === 'client_credentials' && $this->isGrantTypeEnabled('client_credentials')){
                 // Request a new access token
                 // Request a new access token if the token was previously generated with "client_credentials"
-                $this->authentication->requestAccessToken($this->apiHost, 'client_credentials', $this->clientId, $this->clientSecret);
+                $this->authentication->requestAccessToken($this->apiHost, 'client_credentials', $this->clientId, $this->clientSecret, $this->scope);
             }else{
                 $this->authentication->logout();
             }
@@ -362,7 +362,7 @@ class OAuth2Proxy{
                 // If the previous token was requested with "password" try to generate a "client_credentials" token
                 if($response->getStatusCode() === 401 && $this->authentication->getGrantType() === 'password' && $this->isGrantTypeEnabled('client_credentials')){
                     // Request a new access token using "client_credentials"
-                    $this->authentication->requestAccessToken($this->apiHost, 'client_credentials', $this->clientId, $this->clientSecret);
+                    $this->authentication->requestAccessToken($this->apiHost, 'client_credentials', $this->clientId, $this->clientSecret, $this->scope);
 
                     if($this->authentication->getAccessToken()){
                         // Repeat the request with the new access token
@@ -441,7 +441,8 @@ class OAuth2Proxy{
             $this->clientId,
             $this->clientSecret,
             $username,
-            $password
+            $password,
+            $this->scope
         );
 
         if($tokenRequest->getStatusCode() === 200){
@@ -470,6 +471,30 @@ class OAuth2Proxy{
     }
 
     /**
+     * Proxy token endpoint (/token)
+     * @var string
+     */
+    public static $PROXY_TOKEN_ENDPOINT = '/token';
+
+    /**
+     * Proxy callback endpoint (/callback)
+     * @var string
+     */
+    public static $PROXY_CALLBACK_ENDPOINT = '/callback';
+    
+    /**
+     * Proxy redirect endpoint (/redirect)
+     * @var string
+     */
+    public static $PROXY_REDIRECT_ENDPOINT = '/redirect';
+
+    /**
+     * Proxy API endpoint group (/api)
+     * @var string
+     */
+    public static $PROXY_API_ENDPOINT = '/api';
+
+    /**
      * Run the proxy
      * @return void
      */
@@ -477,22 +502,22 @@ class OAuth2Proxy{
         $route = $this->request->getPathInfo();
 
         // Authorization code callback
-        if($route === '/callback' && $this->isGrantTypeEnabled('authorization_code')){
+        if($route === self::$PROXY_CALLBACK_ENDPOINT && $this->isGrantTypeEnabled('authorization_code')){
             $this->handleAuthorizationCodeCallback();
         }
 
         // Authorization code redirect
-        if($route === '/redirect' && $this->isGrantTypeEnabled('authorization_code')){
+        if($route === self::$PROXY_REDIRECT_ENDPOINT && $this->isGrantTypeEnabled('authorization_code')){
             $this->handleAuthorizationCodeRedirect();
         }
 
         // Handle token request
-        if($route === '/token' && ($this->isGrantTypeEnabled('client_credentials') || $this->isGrantTypeEnabled('password')) ){
+        if($route === self::$PROXY_TOKEN_ENDPOINT && ($this->isGrantTypeEnabled('client_credentials') || $this->isGrantTypeEnabled('password')) ){
             $this->handleTokenRequest();
         }
 
         // API proxy
-        if(substr($route, 0, 5) === '/api/'){
+        if(substr($route, 0, (strlen(self::$PROXY_API_ENDPOINT) + 1)) === (self::$PROXY_API_ENDPOINT . '/')){
             if($this->csrfProtectionEnabled){
                 $this->csrf->validateCsrfToken(true);
             }
