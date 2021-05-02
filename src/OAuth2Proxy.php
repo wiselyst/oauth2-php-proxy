@@ -57,8 +57,6 @@ class OAuth2Proxy{
         if(!$this->session->isStarted()){
             $this->session->start();
         }
-
-
     }
 
     
@@ -376,7 +374,7 @@ class OAuth2Proxy{
                 }
             }
         }
-    
+
         // Dispatch the API response
         Proxy::dispatch($response);
     }
