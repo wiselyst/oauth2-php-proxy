@@ -374,7 +374,7 @@ class OAuth2Proxy{
                 }
             }
         }
-
+    
         // Dispatch the API response
         Proxy::dispatch($response);
     }

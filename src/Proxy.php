@@ -49,7 +49,7 @@ class Proxy{
      * Headers to skip when returning server response
      * @var array
      */
-    protected const SKIP_HEADERS = ['transfer-encoding', 'date', 'host', 'connection', 'content-encoding'];
+    protected const SKIP_HEADERS = ['transfer-encoding', 'date', 'host', 'connection', 'HOST'];
 
     public function __construct(string $serverHost, HttpClientInterface $httpClient, Request $request){
         $this->serverHost = $serverHost;
@@ -82,10 +82,18 @@ class Proxy{
      * Run a proxy request
      * @return ResponseInterface
      */
-    public function run() : ResponseInterface{        
+    public function run() : ResponseInterface{
+        // Remove skip headers
+        $requestHeaders = $this->serverRequest->server->getHeaders();
+        foreach ($requestHeaders as $key => $value){
+            if(in_array($key, self::SKIP_HEADERS)){
+                unset($requestHeaders[$key]);
+            }
+        }
+
         $response = $this->client->request($this->serverRequest->getMethod(), $this->serverHost . $this->getProxyPathInfo(), [
             'headers' => array_merge(
-                $this->serverRequest->server->getHeaders(),
+                $requestHeaders,
                 $this->authorizationHeader
             ),
             'body' => count($this->serverRequest->request->all()) !== 0 ? $this->serverRequest->request->all() : $this->serverRequest->getContent(),
@@ -112,9 +120,6 @@ class Proxy{
      * @return void
      */
     public static function dispatch(ResponseInterface $response){
-        // Clean the output buffer
-        ob_clean();
-
         // Set response headers
         foreach ($response->getHeaders(false) as $name => $values) {
             if(!in_array(strtolower($name), self::SKIP_HEADERS)){
