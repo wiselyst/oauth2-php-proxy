@@ -49,7 +49,7 @@ class Proxy{
      * Headers to skip when returning server response
      * @var array
      */
-    protected const SKIP_HEADERS = ['transfer-encoding', 'date', 'host', 'connection', 'HOST'];
+    protected const SKIP_HEADERS = ['transfer-encoding', 'date', 'host', 'connection', 'HOST', 'content-encoding'];
 
     public function __construct(string $serverHost, HttpClientInterface $httpClient, Request $request){
         $this->serverHost = $serverHost;
@@ -101,7 +101,7 @@ class Proxy{
         ]);
 
         $response->getContent(false); // This is to not throw an exception in case of an response error
-        
+
         return $response;
     }
 
