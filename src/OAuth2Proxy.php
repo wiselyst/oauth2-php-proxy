@@ -11,6 +11,7 @@ use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Session\Session;
 use Symfony\Contracts\HttpClient\HttpClientInterface;
 use League\MimeTypeDetection\ExtensionMimeTypeDetector;
+use Symfony\Component\HttpFoundation\Session\Storage\NativeSessionStorage;
 
 class OAuth2Proxy{
 
@@ -47,7 +48,11 @@ class OAuth2Proxy{
 
     public function __construct(){
         // Initialize dependencies
-        $this->session = new Session();
+        $sessionStorage = new NativeSessionStorage([
+            'cookie_path' => '/'
+        ]);
+        $this->session = new Session($sessionStorage);
+        
         $this->request = Request::createFromGlobals();
         $this->httpClient = HttpClient::create();
         $this->csrf = new CsrfProtection($this->session, $this->request);
