@@ -84,7 +84,7 @@ class Proxy{
      */
     public function run() : ResponseInterface{
         // Remove skip headers
-        $requestHeaders = $this->serverRequest->server->getHeaders();
+        $requestHeaders = $this->serverRequest->headers->all();
         foreach ($requestHeaders as $key => $value){
             if(in_array($key, self::SKIP_HEADERS)){
                 unset($requestHeaders[$key]);
