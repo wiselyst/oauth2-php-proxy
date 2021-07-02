@@ -3,7 +3,6 @@
 namespace Wiselyst\OAuth2Proxy;
 
 use Symfony\Component\HttpFoundation\Request;
-use Symfony\Component\HttpClient\HttpClient;
 use Symfony\Contracts\HttpClient\HttpClientInterface;
 use Symfony\Contracts\HttpClient\ResponseInterface;
 
@@ -45,16 +44,10 @@ class Proxy{
      */
     protected $client;
 
-    /**
-     * Headers to skip when returning server response
-     * @var array
-     */
-    protected const SKIP_HEADERS = ['TRANSFER-ENCODING', 'DATE', 'HOST', 'CONNECTION', 'CONTENT-ENCODING'];
-
     public function __construct(string $serverHost, HttpClientInterface $httpClient, Request $request){
         $this->serverHost = $serverHost;
 
-        $this->client = $httpClient; HttpClient::create();
+        $this->client = $httpClient;
         $this->serverRequest = $request;
         $this->proxyRequest = $this->serverRequest;
         $this->proxyPathInfo = $this->serverRequest->getPathInfo();
@@ -86,10 +79,11 @@ class Proxy{
         // Remove skip headers
         $requestHeaders = $this->serverRequest->headers->all();
         foreach ($requestHeaders as $key => $value){
-            if(in_array($key, self::SKIP_HEADERS)){
+            if(!in_array(strtolower($key), OAuth2Proxy::$ALLOWED_HEADERS)){
                 unset($requestHeaders[$key]);
             }
         }
+
 
         $response = $this->client->request($this->serverRequest->getMethod(), $this->serverHost . $this->getProxyPathInfo(), [
             'headers' => array_merge(
@@ -122,7 +116,7 @@ class Proxy{
     public static function dispatch(ResponseInterface $response){
         // Set response headers
         foreach ($response->getHeaders(false) as $name => $values) {
-            if(!in_array(strtolower($name), self::SKIP_HEADERS)){
+            if(in_array(strtolower($name), OAuth2Proxy::$ALLOWED_HEADERS)){
                 foreach($values as $value){
                     header(sprintf('%s: %s', $name, $value));
                 }
