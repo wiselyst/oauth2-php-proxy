@@ -46,6 +46,13 @@ class OAuth2Proxy{
      */
     protected $csrf;
 
+    /**
+     * List of headers allowed to be proxied
+     * 
+     * @var string[]
+     */
+    public static $ALLOWED_HEADERS = ['content-type', 'accept-language', 'user-agent', 'accept']; 
+
     public function __construct(){
         // Initialize dependencies
         $sessionStorage = new NativeSessionStorage([
