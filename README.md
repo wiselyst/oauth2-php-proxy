@@ -96,6 +96,12 @@ OAuth2Proxy::$PROXY_REDIRECT_ENDPOINT = '/redirect';
 OAuth2Proxy::$PROXY_API_ENDPOINT = '/api';
 ```
 
+### Allowed headers
+By default only the following headers are allowed to be proxied, but it is possible to override this setting as follows:
+
+```php
+OAuth2Proxy::$ALLOWED_HEADERS = ['content-type', 'accept-language', 'user-agent', 'accept'];
+```
 ### Server configuration
 The server should be configured to rewrite all requests to your proxy script
 
@@ -112,9 +118,9 @@ The server should be configured to rewrite all requests to your proxy script
 
 #### Nginx
 ```nginx
-location / {
+location ~* {
   if (!-e $request_filename){
-    rewrite ^(.*)$ /index.php break;
+    try_files $uri $uri/ /index.php?$query_string;
   }
 }
 ```
