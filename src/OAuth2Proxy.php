@@ -536,7 +536,7 @@ class OAuth2Proxy{
 
         // API proxy
         if(substr($route, 0, (strlen(self::$PROXY_API_ENDPOINT) + 1)) === (self::$PROXY_API_ENDPOINT . '/')){
-            if($this->csrfProtectionEnabled && in_array($this->request->getMethod(), self::$CSRF_SUPPORTED_METHODS){
+            if($this->csrfProtectionEnabled && in_array($this->request->getMethod(), self::$CSRF_SUPPORTED_METHODS)){
                 $this->csrf->validateCsrfToken(true);
             }
             $this->handleApiProxy();

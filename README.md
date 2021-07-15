@@ -77,7 +77,7 @@ Angular Http Client or Axios will automatically include the `XSRF-TOKEN` value.
 By default only `'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'` requests are validated. This setting can be customized as follows:
 
 ```php
-OAuth2Proxy::CSRF_SUPPORTED_METHODS = ['GET', 'POST'];
+OAuth2Proxy::$CSRF_SUPPORTED_METHODS = ['GET', 'POST'];
 ```
 
 ### Proxy endpoints
