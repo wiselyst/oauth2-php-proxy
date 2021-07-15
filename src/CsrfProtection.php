@@ -62,7 +62,6 @@ class CsrfProtection{
         }
 
         if($throwException){
-            echo $sessionToken . PHP_EOL;
             throw new Exception("X-XSRF-TOKEN header invalid or not present in request");
         }
 
