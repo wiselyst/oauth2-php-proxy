@@ -55,13 +55,14 @@ class CsrfProtection{
      * @return boolean
      */
     public function validateCsrfToken($throwException = false): bool{
-        $headerToken = $this->request->headers->get('X-CSRF-TOKEN');
+        $headerToken = $this->request->headers->get('X-XSRF-TOKEN');
         $sessionToken = $this->session->get('XSRF-TOKEN');
         if($headerToken !== null && $sessionToken !== null && $headerToken === $sessionToken){
             return true;
         }
 
         if($throwException){
+            echo $sessionToken . PHP_EOL;
             throw new Exception("X-XSRF-TOKEN header invalid or not present in request");
         }
 

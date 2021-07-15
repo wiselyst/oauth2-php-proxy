@@ -60,14 +60,14 @@ $proxy->requireAuthentication();
 ```
 
 ### CSRF Protection
-If enabled, cross-site request forgeries protection, will set a cookie named `XSRF-TOKEN` with a token. The token must be sent as a request header on each /api or /token request.
+If enabled, cross-site request forgeries protection, will set a cookie named `XSRF-TOKEN` with a token. The token must be sent as a request header `X-XSRF-TOKEN` on each /api or /token request.
 
 Example (jQuery):
 ```js
 $.ajax{ // or use $.ajaxSetup
     // ...
     headers: {
-        'X-SRF-TOKEN': Cookie.get('XSRF-TOKEN') // See js-cookie
+        'X-XSRF-TOKEN': Cookie.get('XSRF-TOKEN') // See js-cookie
     }
     // ...
 }
