@@ -74,6 +74,12 @@ $.ajax{ // or use $.ajaxSetup
 ```
 Angular Http Client or Axios will automatically include the `XSRF-TOKEN` value.
 
+By default only `'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'` requests are validated. This setting can be customized as follows:
+
+```php
+OAuth2Proxy::CSRF_SUPPORTED_METHODS = ['GET', 'POST'];
+```
+
 ### Proxy endpoints
 1. /callback - Authorization code callback
 2. /redirect - Redirect for authorization code request

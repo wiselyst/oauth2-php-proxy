@@ -52,6 +52,7 @@ class OAuth2Proxy{
      * @var string[]
      */
     public static $ALLOWED_HEADERS = ['content-type', 'accept-language', 'user-agent', 'accept']; 
+    
 
     public function __construct(){
         // Initialize dependencies
@@ -152,6 +153,13 @@ class OAuth2Proxy{
      * @var bool
      */
     protected $requireAuthentication = false;
+
+    /**
+     * CSRF Supported Methods
+     * 
+     * @var string[]
+     */
+    public static $CSRF_SUPPORTED_METHODS = ['POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS']; 
 
     /**
      * Set SPA directory
@@ -528,7 +536,7 @@ class OAuth2Proxy{
 
         // API proxy
         if(substr($route, 0, (strlen(self::$PROXY_API_ENDPOINT) + 1)) === (self::$PROXY_API_ENDPOINT . '/')){
-            if($this->csrfProtectionEnabled){
+            if($this->csrfProtectionEnabled && in_array($this->request->getMethod(), self::$CSRF_SUPPORTED_METHODS){
                 $this->csrf->validateCsrfToken(true);
             }
             $this->handleApiProxy();
