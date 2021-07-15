@@ -42,7 +42,9 @@ class CsrfProtection{
                 unset($_COOKIE['XSRF-TOKEN']);
             }
 
-            setcookie("XSRF-TOKEN", $sessionToken);
+            setcookie("XSRF-TOKEN", $sessionToken, [
+                'path' => '/'
+            ]);
         }
     }
 
