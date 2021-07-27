@@ -70,12 +70,6 @@ class OAuth2Proxy{
         if(!$this->session->isStarted()){
             $this->session->start();
         }
-        
-        // Handle JSON Request body
-        if (0 === strpos($this->request->headers->get('Content-Type'), 'application/json')) {
-            $data = json_decode($this->request->getContent(), true);
-            $this->request->request->replace(is_array($data) ? $data : array());
-        }
     }
 
     
@@ -271,6 +265,20 @@ class OAuth2Proxy{
      * @var string
      */
     public static $REMOTE_AUTHORIZE_ENDPOINT = '/authorize';
+
+
+    /**
+     * This method replaces the request body
+     * to add JSON payloads support
+     *
+     * @return void
+     */
+    protected function parseRequestBody() {
+        if (0 === strpos($this->request->headers->get('Content-Type'), 'application/json')) {
+            $data = json_decode($this->request->getContent(), true);
+            $this->request->request->replace(is_array($data) ? $data : array());
+        }
+    }
 
     /**
      * Handle Authorization Code redirect request
@@ -537,6 +545,7 @@ class OAuth2Proxy{
 
         // Handle token request
         if($route === self::$PROXY_TOKEN_ENDPOINT && ($this->isGrantTypeEnabled('client_credentials') || $this->isGrantTypeEnabled('password')) ){
+            $this->parseRequestBody();
             $this->handleTokenRequest();
         }
 
