@@ -70,6 +70,12 @@ class OAuth2Proxy{
         if(!$this->session->isStarted()){
             $this->session->start();
         }
+        
+        // Handle JSON Request body
+        if (0 === strpos($this->request->headers->get('Content-Type'), 'application/json')) {
+            $data = json_decode($this->request->getContent(), true);
+            $this->request->request->replace(is_array($data) ? $data : array());
+        }
     }
 
     
