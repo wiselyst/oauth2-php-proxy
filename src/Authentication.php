@@ -196,7 +196,6 @@ class Authentication{
      */
     public function logout(){
         $this->session->clear();
-        $this->session->migrate(true);
         $this->csrf->generateCsrfToken(true);
     }
 }
